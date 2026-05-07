@@ -11,4 +11,6 @@ server.use('/', routes);
 
 server.listen(PORT, () => {
     console.log(`[NEUROLEX] Backend active on port ${PORT}`);
+    console.log(`[NEUROLEX] HF_TOKEN: ${process.env.HF_TOKEN ? 'SET' : 'MISSING'}`);
+    console.log(`[NEUROLEX] CHROMA_URL: ${process.env.CHROMA_URL || 'MISSING'}`);
 });
