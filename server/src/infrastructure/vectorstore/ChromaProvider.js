@@ -36,14 +36,17 @@ export class VectorIndex {
 
             const embeddings = await this.embedder.embed(textBatch);
 
+            console.log(`[VectorIndex] Embeddings count: ${embeddings.length}, first dim: ${embeddings[0]?.length}`);
+
             const vectors = textBatch
                 .map((text, j) => ({
-                    id: `vec_${Date.now()}_${offset + j}`,
+                    id: `vec_${Date.now()}_${offset + j}_${Math.random().toString(36).slice(2, 8)}`,
                     values: embeddings[j],
-                    metadata: { ...metaBatch[j], text: text.substring(0, 1000) }
+                    metadata: { ...metaBatch[j], text: text.substring(0, 500) }
                 }))
-                .filter(v => v.values && v.values.length > 0);
+                .filter(v => Array.isArray(v.values) && v.values.length > 0 && typeof v.values[0] === 'number');
 
+            console.log(`[VectorIndex] Vectors to upsert: ${vectors.length}`);
             if (vectors.length === 0) continue;
 
             await index.namespace(this.namespace).upsert(vectors);
