@@ -2,7 +2,13 @@ import { ChromaClient } from 'chromadb';
 
 export class VectorIndex {
     constructor(opts) {
-        this.client = new ChromaClient({ path: opts.url || 'http://localhost:8000' });
+        const chromaUrl = opts.url || 'http://localhost:8000';
+        const parsed = new URL(chromaUrl);
+        this.client = new ChromaClient({
+            host: parsed.hostname,
+            port: parsed.port || (parsed.protocol === 'https:' ? 443 : 8000),
+            ssl: parsed.protocol === 'https:'
+        });
         this.namespace = 'neurolex_docs';
         this.embedder = opts.embedder;
     }

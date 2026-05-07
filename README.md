@@ -111,8 +111,8 @@ A full-stack RAG (Retrieval-Augmented Generation) application that lets you uplo
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/neurolex.git
-cd neurolex
+git clone https://github.com/YashSensei/document-neural-chat.git
+cd document-neural-chat
 
 # Server
 cd server && npm install
