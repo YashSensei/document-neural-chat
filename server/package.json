@@ -7,11 +7,17 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "node index.js"
   },
-  "keywords": ["rag", "pdf", "neural", "chromadb"],
+  "keywords": [
+    "rag",
+    "pdf",
+    "neural",
+    "chromadb"
+  ],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@pinecone-database/pinecone": "^7.2.0",
     "@xenova/transformers": "^2.17.2",
     "chromadb": "^3.4.3",
     "cors": "^2.8.6",

@@ -1,73 +1,55 @@
-import { ChromaClient } from 'chromadb';
+import { Pinecone } from '@pinecone-database/pinecone';
 
 export class VectorIndex {
     constructor(opts) {
-        const chromaUrl = opts.url || 'http://localhost:8000';
-        const parsed = new URL(chromaUrl);
-        this.client = new ChromaClient({
-            host: parsed.hostname,
-            port: parsed.port || (parsed.protocol === 'https:' ? 443 : 8000),
-            ssl: parsed.protocol === 'https:'
-        });
-        this.namespace = 'neurolex_docs';
+        this.pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
+        this.indexName = process.env.PINECONE_INDEX || 'neurolex';
         this.embedder = opts.embedder;
+        this.namespace = 'default';
     }
 
     async purge() {
+        const index = this.pc.index(this.indexName);
         try {
-            await this.client.deleteCollection({ name: this.namespace });
+            await index.namespace(this.namespace).deleteAll();
         } catch (_) {}
-        return await this.client.createCollection({
-            name: this.namespace,
-            embeddingFunction: { generate: async () => [] },
-            metadata: { 'hnsw:space': 'cosine' }
-        });
     }
 
     async store(texts, metadataList) {
-        const collection = await this.client.getCollection({ name: this.namespace });
-        const chunkSize = 50;
+        const index = this.pc.index(this.indexName);
+        const batchSize = 50;
 
-        for (let offset = 0; offset < texts.length; offset += chunkSize) {
-            const textBatch = texts.slice(offset, offset + chunkSize);
-            const metaBatch = metadataList.slice(offset, offset + chunkSize);
-            const ids = textBatch.map((_, j) => `vec_${Date.now()}_${offset + j}`);
+        for (let offset = 0; offset < texts.length; offset += batchSize) {
+            const textBatch = texts.slice(offset, offset + batchSize);
+            const metaBatch = metadataList.slice(offset, offset + batchSize);
 
             const embeddings = await this.embedder.embed(textBatch);
 
-            await collection.add({
-                ids,
-                embeddings,
-                metadatas: metaBatch,
-                documents: textBatch
-            });
-            console.log(`[VectorIndex] Stored batch ${Math.floor(offset / chunkSize) + 1}/${Math.ceil(texts.length / chunkSize)}`);
+            const vectors = textBatch.map((text, j) => ({
+                id: `vec_${Date.now()}_${offset + j}`,
+                values: embeddings[j],
+                metadata: { ...metaBatch[j], text }
+            }));
+
+            await index.namespace(this.namespace).upsert(vectors);
+            console.log(`[VectorIndex] Stored batch ${Math.floor(offset / batchSize) + 1}/${Math.ceil(texts.length / batchSize)}`);
         }
     }
 
     async search(queryText, topK = 3) {
-        const collection = await this.client.getCollection({ name: this.namespace });
+        const index = this.pc.index(this.indexName);
         const queryVec = await this.embedder.embed([queryText]);
 
-        const hits = await collection.query({
-            queryEmbeddings: queryVec,
-            nResults: topK,
+        const results = await index.namespace(this.namespace).query({
+            vector: queryVec[0],
+            topK,
+            includeMetadata: true
         });
 
-        return this._normalize(hits);
-    }
-
-    _normalize(raw) {
-        const output = [];
-        if (raw.documents[0]) {
-            for (let i = 0; i < raw.documents[0].length; i++) {
-                output.push({
-                    text: raw.documents[0][i],
-                    metadata: raw.metadatas[0][i],
-                    distance: raw.distances[0][i]
-                });
-            }
-        }
-        return output;
+        return results.matches.map(match => ({
+            text: match.metadata.text,
+            metadata: { page: match.metadata.page, section: match.metadata.section },
+            distance: 1 - match.score
+        }));
     }
 }

@@ -10,10 +10,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const embedder = new NeuralEmbedder();
-const vectorIndex = new VectorIndex({
-    url: process.env.CHROMA_URL,
-    embedder
-});
+const vectorIndex = new VectorIndex({ embedder });
 
 const llmGateway = new LLMGateway({
     apiKey: process.env.HF_TOKEN,
