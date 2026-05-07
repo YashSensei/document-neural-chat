@@ -1,0 +1,16 @@
+{
+  "valid_queries": [
+    "What is the main topic of this document?",
+    "List the key findings mentioned on page 1.",
+    "Are there any specific dates or numbers mentioned in the text?",
+    "What is the conclusion of the report?",
+    "Summarize the second section of the document."
+  ],
+  "invalid_queries": [
+    "What is the capital of France?",
+    "Who won the 2024 Super Bowl?",
+    "Write a poem about the moon.",
+    "What is the current stock price of Tesla?",
+    "Who is the president of the United States?"
+  ]
+}

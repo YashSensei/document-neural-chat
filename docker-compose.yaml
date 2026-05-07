@@ -1,0 +1,12 @@
+services:
+  chromadb:
+    image: chromadb/chroma
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_storage:/chroma/chroma
+    environment:
+      - ALLOW_RESET=TRUE
+
+volumes:
+  chroma_storage:
