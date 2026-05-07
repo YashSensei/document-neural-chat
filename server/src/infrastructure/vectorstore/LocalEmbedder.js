@@ -7,7 +7,7 @@ export class NeuralEmbedder {
 
     async embed(textArray) {
         const results = [];
-        const batchSize = 10;
+        const batchSize = 8;
 
         for (let i = 0; i < textArray.length; i += batchSize) {
             const batch = textArray.slice(i, i + batchSize);
@@ -25,7 +25,6 @@ export class NeuralEmbedder {
 
                 if (response.ok) break;
                 if (response.status === 503) {
-                    console.log('[NeuralEmbedder] Model loading, retrying...');
                     await new Promise(r => setTimeout(r, 5000));
                 } else {
                     break;
@@ -34,37 +33,41 @@ export class NeuralEmbedder {
 
             if (!response.ok) {
                 const errText = await response.text();
-                console.error(`[NeuralEmbedder] Failed: ${response.status} — ${errText.substring(0, 200)}`);
-                throw new Error(`Embedding failed: ${response.status}`);
+                throw new Error(`Embedding failed: ${response.status} - ${errText.substring(0, 100)}`);
             }
 
             const raw = await response.json();
-            console.log(`[NeuralEmbedder] Response shape: ${Array.isArray(raw) ? raw.length : typeof raw}, first item type: ${Array.isArray(raw[0]) ? (Array.isArray(raw[0][0]) ? '3D' : '2D') : typeof raw[0]}`);
 
             for (const item of raw) {
-                if (Array.isArray(item) && Array.isArray(item[0])) {
-                    // 3D: token-level embeddings — mean pool to get sentence embedding
-                    const dim = item[0].length;
-                    const pooled = new Array(dim).fill(0);
-                    for (const tokenVec of item) {
-                        for (let d = 0; d < dim; d++) {
-                            pooled[d] += tokenVec[d];
-                        }
-                    }
-                    for (let d = 0; d < dim; d++) {
-                        pooled[d] /= item.length;
-                    }
-                    results.push(pooled);
-                } else if (Array.isArray(item) && typeof item[0] === 'number') {
-                    // 2D: already a sentence embedding
-                    results.push(item);
-                } else {
-                    console.error('[NeuralEmbedder] Unexpected embedding format:', typeof item);
-                    results.push([]);
-                }
+                const vec = this._toFlat384(item);
+                results.push(vec);
             }
         }
 
         return results;
+    }
+
+    _toFlat384(item) {
+        if (!Array.isArray(item)) return [];
+
+        // Already a flat vector [0.1, 0.2, ...]
+        if (typeof item[0] === 'number') return item;
+
+        // Token-level embeddings [[0.1, ...], [0.2, ...], ...] — mean pool
+        if (Array.isArray(item[0]) && typeof item[0][0] === 'number') {
+            const dim = item[0].length;
+            const pooled = new Array(dim).fill(0);
+            for (const row of item) {
+                for (let d = 0; d < dim; d++) {
+                    pooled[d] += row[d];
+                }
+            }
+            for (let d = 0; d < dim; d++) {
+                pooled[d] /= item.length;
+            }
+            return pooled;
+        }
+
+        return [];
     }
 }

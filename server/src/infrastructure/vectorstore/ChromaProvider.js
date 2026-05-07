@@ -5,19 +5,18 @@ export class VectorIndex {
         this.pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
         this.indexName = process.env.PINECONE_INDEX || 'neurolex';
         this.embedder = opts.embedder;
-        this.namespace = 'default';
+        this.ns = 'default';
     }
 
     async purge() {
-        const index = this.pc.index(this.indexName);
         try {
-            await index.namespace(this.namespace).deleteAll();
+            const index = this.pc.index(this.indexName);
+            await index.namespace(this.ns).deleteAll();
         } catch (_) {}
     }
 
     async store(texts, metadataList) {
         const index = this.pc.index(this.indexName);
-        const batchSize = 50;
 
         const validTexts = [];
         const validMeta = [];
@@ -30,27 +29,30 @@ export class VectorIndex {
 
         if (validTexts.length === 0) return;
 
-        for (let offset = 0; offset < validTexts.length; offset += batchSize) {
-            const textBatch = validTexts.slice(offset, offset + batchSize);
-            const metaBatch = validMeta.slice(offset, offset + batchSize);
+        const allEmbeddings = await this.embedder.embed(validTexts);
 
-            const embeddings = await this.embedder.embed(textBatch);
+        const records = [];
+        for (let i = 0; i < validTexts.length; i++) {
+            if (Array.isArray(allEmbeddings[i]) && allEmbeddings[i].length === 384) {
+                records.push({
+                    id: `v${Date.now()}${i}${Math.random().toString(36).slice(2, 6)}`,
+                    values: allEmbeddings[i],
+                    metadata: {
+                        page: validMeta[i].page || 1,
+                        section: validMeta[i].section || 'General',
+                        text: validTexts[i].substring(0, 500)
+                    }
+                });
+            }
+        }
 
-            console.log(`[VectorIndex] Embeddings count: ${embeddings.length}, first dim: ${embeddings[0]?.length}`);
+        if (records.length === 0) return;
 
-            const vectors = textBatch
-                .map((text, j) => ({
-                    id: `vec_${Date.now()}_${offset + j}_${Math.random().toString(36).slice(2, 8)}`,
-                    values: embeddings[j],
-                    metadata: { ...metaBatch[j], text: text.substring(0, 500) }
-                }))
-                .filter(v => Array.isArray(v.values) && v.values.length > 0 && typeof v.values[0] === 'number');
-
-            console.log(`[VectorIndex] Vectors to upsert: ${vectors.length}`);
-            if (vectors.length === 0) continue;
-
-            await index.namespace(this.namespace).upsert(vectors);
-            console.log(`[VectorIndex] Stored batch ${Math.floor(offset / batchSize) + 1}/${Math.ceil(validTexts.length / batchSize)}`);
+        const batchSize = 50;
+        for (let i = 0; i < records.length; i += batchSize) {
+            const batch = records.slice(i, i + batchSize);
+            await index.namespace(this.ns).upsert({ records: batch });
+            console.log(`[VectorIndex] Upserted ${batch.length} vectors`);
         }
     }
 
@@ -58,13 +60,13 @@ export class VectorIndex {
         const index = this.pc.index(this.indexName);
         const queryVec = await this.embedder.embed([queryText]);
 
-        const results = await index.namespace(this.namespace).query({
+        const results = await index.namespace(this.ns).query({
             vector: queryVec[0],
             topK,
             includeMetadata: true
         });
 
-        return results.matches.map(match => ({
+        return (results.matches || []).map(match => ({
             text: match.metadata.text,
             metadata: { page: match.metadata.page, section: match.metadata.section },
             distance: 1 - match.score
