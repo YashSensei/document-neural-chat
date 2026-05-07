@@ -19,20 +19,35 @@ export class VectorIndex {
         const index = this.pc.index(this.indexName);
         const batchSize = 50;
 
-        for (let offset = 0; offset < texts.length; offset += batchSize) {
-            const textBatch = texts.slice(offset, offset + batchSize);
-            const metaBatch = metadataList.slice(offset, offset + batchSize);
+        const validTexts = [];
+        const validMeta = [];
+        for (let i = 0; i < texts.length; i++) {
+            if (texts[i] && texts[i].trim().length > 0) {
+                validTexts.push(texts[i]);
+                validMeta.push(metadataList[i]);
+            }
+        }
+
+        if (validTexts.length === 0) return;
+
+        for (let offset = 0; offset < validTexts.length; offset += batchSize) {
+            const textBatch = validTexts.slice(offset, offset + batchSize);
+            const metaBatch = validMeta.slice(offset, offset + batchSize);
 
             const embeddings = await this.embedder.embed(textBatch);
 
-            const vectors = textBatch.map((text, j) => ({
-                id: `vec_${Date.now()}_${offset + j}`,
-                values: embeddings[j],
-                metadata: { ...metaBatch[j], text }
-            }));
+            const vectors = textBatch
+                .map((text, j) => ({
+                    id: `vec_${Date.now()}_${offset + j}`,
+                    values: embeddings[j],
+                    metadata: { ...metaBatch[j], text: text.substring(0, 1000) }
+                }))
+                .filter(v => v.values && v.values.length > 0);
+
+            if (vectors.length === 0) continue;
 
             await index.namespace(this.namespace).upsert(vectors);
-            console.log(`[VectorIndex] Stored batch ${Math.floor(offset / batchSize) + 1}/${Math.ceil(texts.length / batchSize)}`);
+            console.log(`[VectorIndex] Stored batch ${Math.floor(offset / batchSize) + 1}/${Math.ceil(validTexts.length / batchSize)}`);
         }
     }
 
