@@ -1,22 +1,29 @@
-import { pipeline } from '@xenova/transformers';
+import OpenAI from 'openai';
 
 export class NeuralEmbedder {
-    constructor(modelId = 'Xenova/paraphrase-multilingual-MiniLM-L12-v2') {
-        this.modelId = modelId;
-        this.extractor = null;
+    constructor() {
+        this.client = new OpenAI({
+            apiKey: process.env.HF_TOKEN,
+            baseURL: 'https://router.huggingface.co/v1',
+        });
+        this.model = 'sentence-transformers/all-MiniLM-L6-v2';
     }
 
     async embed(textArray) {
-        if (!this.extractor) {
-            console.log('[NeuralEmbedder] Loading transformer model...');
-            this.extractor = await pipeline('feature-extraction', this.modelId);
+        const results = [];
+        const batchSize = 10;
+
+        for (let i = 0; i < textArray.length; i += batchSize) {
+            const batch = textArray.slice(i, i + batchSize);
+            const response = await this.client.embeddings.create({
+                model: this.model,
+                input: batch,
+            });
+            for (const item of response.data) {
+                results.push(item.embedding);
+            }
         }
 
-        const vectors = [];
-        for (const text of textArray) {
-            const output = await this.extractor(text, { pooling: 'mean', normalize: true });
-            vectors.push(Array.from(output.data));
-        }
-        return vectors;
+        return results;
     }
 }
