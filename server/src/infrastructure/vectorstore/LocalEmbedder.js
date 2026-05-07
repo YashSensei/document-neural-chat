@@ -14,7 +14,6 @@ export class NeuralEmbedder {
 
             let response;
             for (let attempt = 0; attempt < 3; attempt++) {
-                console.log(`[NeuralEmbedder] Embedding batch, attempt ${attempt + 1}, token: ${this.token ? 'SET' : 'MISSING'}`);
                 response = await fetch(EMBEDDING_URL, {
                     method: 'POST',
                     headers: {
@@ -39,9 +38,30 @@ export class NeuralEmbedder {
                 throw new Error(`Embedding failed: ${response.status}`);
             }
 
-            const embeddings = await response.json();
-            for (const emb of embeddings) {
-                results.push(emb);
+            const raw = await response.json();
+            console.log(`[NeuralEmbedder] Response shape: ${Array.isArray(raw) ? raw.length : typeof raw}, first item type: ${Array.isArray(raw[0]) ? (Array.isArray(raw[0][0]) ? '3D' : '2D') : typeof raw[0]}`);
+
+            for (const item of raw) {
+                if (Array.isArray(item) && Array.isArray(item[0])) {
+                    // 3D: token-level embeddings — mean pool to get sentence embedding
+                    const dim = item[0].length;
+                    const pooled = new Array(dim).fill(0);
+                    for (const tokenVec of item) {
+                        for (let d = 0; d < dim; d++) {
+                            pooled[d] += tokenVec[d];
+                        }
+                    }
+                    for (let d = 0; d < dim; d++) {
+                        pooled[d] /= item.length;
+                    }
+                    results.push(pooled);
+                } else if (Array.isArray(item) && typeof item[0] === 'number') {
+                    // 2D: already a sentence embedding
+                    results.push(item);
+                } else {
+                    console.error('[NeuralEmbedder] Unexpected embedding format:', typeof item);
+                    results.push([]);
+                }
             }
         }
 
